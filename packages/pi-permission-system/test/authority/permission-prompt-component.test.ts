@@ -499,6 +499,38 @@ describe("presentInlinePermissionPrompt", () => {
   });
 
   describe("requestPermissionDecision dispatch", () => {
+    it("keeps the TUI reviewer's automatic approval distinct from a human choice", async () => {
+      const { view, captured } = makeFakeView(true);
+      const promise = requestPermissionDecision(view, "Title", ASK);
+      const decision = {
+        approved: true,
+        state: "approved" as const,
+        autoApproved: true,
+      };
+      captured.done?.(decision);
+      expect((await promise).decidedBy).toEqual({
+        kind: "authorizer",
+        name: "pi-auto-review",
+        verdict: "allow",
+        reason: null,
+      });
+    });
+
+    it("does not turn a denied TUI result with an automation marker into an approval", async () => {
+      const { view, captured } = makeFakeView(true);
+      const promise = requestPermissionDecision(view, "Title", ASK);
+      const decision = {
+        approved: false,
+        state: "denied" as const,
+        autoApproved: true,
+      };
+      captured.done?.(decision);
+      expect(await promise).toMatchObject({
+        approved: false,
+        decidedBy: { kind: "user", via: "dialog" },
+      });
+    });
+
     it("renders the inline dialog in TUI mode", async () => {
       const { view, captured } = makeFakeView(true);
       const promise = requestPermissionDecision(view, "Title", ASK);

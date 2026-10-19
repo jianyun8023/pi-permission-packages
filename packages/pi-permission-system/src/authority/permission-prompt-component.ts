@@ -201,6 +201,26 @@ function attributeToHuman(
   decision: UnattributedDecision,
   via: UserDecisionSurface,
 ): PermissionPromptDecision {
+  // The local TUI reviewer interceptor returns this marker after consuming
+  // its one-shot approval. It is never accepted from RPC select/input data
+  // and changes attribution only, not the outcome or grant scope.
+  if (
+    via === "dialog" &&
+    decision.approved &&
+    decision.state === "approved" &&
+    "autoApproved" in decision &&
+    decision.autoApproved === true
+  ) {
+    return {
+      ...decision,
+      decidedBy: {
+        kind: "authorizer",
+        name: "pi-auto-review",
+        verdict: "allow",
+        reason: null,
+      },
+    };
+  }
   const decidedBy: DecisionSource = { kind: "user", via };
   return { ...decision, decidedBy };
 }
