@@ -70,8 +70,9 @@ const SESSION_SERVICES_KEY = Symbol.for(
   "@gotgenes/pi-permission-system:session-services",
 );
 
-/** The six events the factory must register a handler for. */
+/** The lifecycle events the factory must register a handler for. */
 const EXPECTED_HANDLERS = [
+  "agent_end",
   "before_agent_start",
   "input",
   "resources_discover",

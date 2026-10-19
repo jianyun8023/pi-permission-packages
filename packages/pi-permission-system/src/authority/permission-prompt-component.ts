@@ -40,6 +40,7 @@ import {
   reducePrompt,
   visibleActions,
 } from "./permission-prompt-decision";
+import { consumeRpcReviewedApproval } from "./rpc-reviewed-approval";
 
 /**
  * Inline `ctx.ui.custom` permission dialog for TUI sessions.
@@ -102,7 +103,25 @@ export async function requestPermissionDecision(
   title: string,
   payload: PromptPayload,
   options?: RequestPermissionOptions,
+  requestId?: string,
 ): Promise<PermissionPromptDecision> {
+  // The deterministic gate and model already ruled on this exact request.
+  // Keep machine provenance; no browser answer or session-wide grant is minted.
+  if (
+    view.mode === "rpc" &&
+    consumeRpcReviewedApproval(view.ui, requestId, payload)
+  ) {
+    return {
+      approved: true,
+      state: "approved",
+      decidedBy: {
+        kind: "authorizer",
+        name: "pi-auto-review",
+        verdict: "allow",
+        reason: null,
+      },
+    };
+  }
   const window = AnswerWindow.open(view.promptTimeoutMs);
   const surface = chooseDecisionSurface(view, title, payload, options);
   try {

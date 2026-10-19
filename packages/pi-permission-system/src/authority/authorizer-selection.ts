@@ -199,6 +199,17 @@ export class AuthorizerSelection
       const authorize = this.deps.authorizerRegistry.get(name);
       if (authorize === undefined) {
         this.deps.chainAudit.auditUnregisteredLink({ requestId, name });
+        if (name === "pi-auto-review") {
+          links.push({
+            name,
+            authorize: () =>
+              Promise.resolve({
+                kind: "deny",
+                reason:
+                  "The configured automatic reviewer is not ready. No operation was executed. Reload the session after fixing the reviewer startup error.",
+              }),
+          });
+        }
         continue;
       }
       resolved.push(name);

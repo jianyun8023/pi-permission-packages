@@ -94,6 +94,7 @@ export function makeFakePi(options: MakeFakePiOptions = {}): FakePi {
       commands.set(name, optionsArg);
     },
     // ── ExtensionAPI methods present for the cast but unused by the factory ─
+    appendEntry: vi.fn(),
     registerProvider: vi.fn(),
     exec: vi.fn(),
   } as FakePi & Record<string, unknown>;

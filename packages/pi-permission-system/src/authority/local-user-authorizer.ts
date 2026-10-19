@@ -27,6 +27,7 @@ import type {
   requestPermissionDecision,
 } from "./permission-prompt-component";
 import type { PromptPermissionDetails } from "./permission-prompter";
+import { consumeRpcReviewedApproval } from "./rpc-reviewed-approval";
 
 /** Dependencies required by {@link LocalUserAuthorizer}. */
 export interface LocalUserAuthorizerDeps {
@@ -80,6 +81,27 @@ export class LocalUserAuthorizer implements TerminalAuthorizer {
   private present(
     details: PromptPermissionDetails,
   ): Promise<PermissionPromptDecision> {
+    // A receipt is consumed before announcing a human prompt. Observers must
+    // never report an automatic decision as a dialog shown to the user.
+    if (
+      this.deps.mode === "rpc" &&
+      consumeRpcReviewedApproval(
+        this.deps.ui,
+        details.requestId,
+        details.payload,
+      )
+    ) {
+      return Promise.resolve({
+        approved: true,
+        state: "approved",
+        decidedBy: {
+          kind: "authorizer",
+          name: "pi-auto-review",
+          verdict: "allow",
+          reason: null,
+        },
+      });
+    }
     emitUiPromptEvent(this.deps.events, buildUiPrompt(details));
     const title = details.forwarding
       ? "Permission Required (Subagent)"
@@ -98,6 +120,7 @@ export class LocalUserAuthorizer implements TerminalAuthorizer {
       title,
       details.payload,
       buildRequestOptions(details),
+      ...(this.deps.mode === "rpc" ? ([details.requestId] as const) : []),
     );
   }
 }

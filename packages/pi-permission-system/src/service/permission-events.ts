@@ -153,6 +153,12 @@ export type PermissionDecisionResolution =
 
 /** Payload emitted on `permissions:decision`. */
 export interface PermissionDecisionEvent {
+  /** Correlation facts added by the session audit owner; never capabilities. */
+  sessionId?: string;
+  adjudicatorSessionId?: string;
+  toolCallId?: string | null;
+  parentToolCallId?: string | null;
+  generationId?: string;
   /**
    * Identifies the permission request this decision resolves, minted when the
    * request was created. Distinct from the host's tool-call id: one tool call

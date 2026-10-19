@@ -46,12 +46,14 @@ import { ToolCallGatePipeline } from "#src/handlers/gates/tool-call-gate-pipelin
 import { createFailClosedToolCall } from "#src/handlers/tool-call-boundary";
 import { DecisionAudit } from "#src/logging/decision-audit";
 import { GateDecisionReporter } from "#src/logging/decision-reporter";
+import { SessionPermissionAudit } from "#src/logging/session-audit";
 import { PermissionSessionLogger } from "#src/logging/session-logger";
 import { pathFlavorForPlatform } from "#src/path/path-flavor";
 import { PermissionManager } from "#src/policy/permission-manager";
 import { PermissionResolver } from "#src/policy/permission-resolver";
 import { ResolverServingPolicy } from "#src/policy/serving-policy";
 import { resolveRenderBudget } from "#src/presentation/dialog-renderer";
+import { isPermissionAuditEntry } from "#src/service/permission-audit";
 import { LocalPermissionsService } from "#src/service/permissions-service";
 import { PermissionServiceLifecycle } from "#src/service/service-lifecycle";
 import { PermissionSession } from "#src/session/permission-session";
@@ -69,6 +71,7 @@ import { getPermissionsService, type PermissionsService } from "./service";
 
 export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
   const agentDir = getAgentDir();
+  const sessionAudit = new SessionPermissionAudit(pi);
   // getPackageDir() is Pi's own install dir; auto-allow it for read-only tools
   // so the agent can read Pi's bundled docs/examples regardless of layout.
   const paths = computeExtensionPaths(agentDir, getPackageDir());
@@ -119,11 +122,13 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
     isYoloEnabled,
   });
 
-  const logger = new PermissionSessionLogger({
-    globalLogsDir: paths.globalLogsDir,
-    getConfig: () => configStore.current(),
-    notify: (message) => session.notify(message),
-  });
+  const logger = sessionAudit.decorate(
+    new PermissionSessionLogger({
+      globalLogsDir: paths.globalLogsDir,
+      getConfig: () => configStore.current(),
+      notify: (message) => session.notify(message),
+    }),
+  );
 
   configStore = new ConfigStore({
     agentDir,
@@ -205,7 +210,9 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
   // Constructed here rather than beside the gate runner below: the serving
   // side broadcasts its own decisions, so both readers share one reporter over
   // this session's event bus.
-  const reporter = new GateDecisionReporter(logger, pi.events);
+  const reporter = new GateDecisionReporter(logger, pi.events, (event) =>
+    sessionAudit.decision(event),
+  );
 
   const requestServer = new ForwardedRequestServer({
     forwardingDir: paths.forwardingDir,
@@ -382,22 +389,60 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
     gateRunner,
   );
 
-  pi.on("session_start", (event, ctx) =>
-    lifecycle.handleSessionStart(event, ctx),
+  pi.on("session_start", (event, ctx) => {
+    sessionAudit.activate(ctx);
+    return lifecycle.handleSessionStart(event, ctx);
+  });
+  pi.events.on("permissions:ui_prompt", (event) =>
+    sessionAudit.prompt(
+      event as import("#src/service/permission-events").PermissionUiPromptEvent,
+    ),
   );
+  pi.on("agent_end", (event) => {
+    if ((event as { aborted?: boolean }).aborted) sessionAudit.interrupt();
+  });
+  pi.registerCommand("permission-history", {
+    description:
+      "Show this branch’s permission decisions without adding model context",
+    handler: async (_args, ctx) => {
+      const entries = ctx.sessionManager
+        .getBranch()
+        .filter(
+          (entry) =>
+            entry.type === "custom" &&
+            entry.customType === "permission-audit/v1",
+        );
+      const lines = entries
+        .map((entry) => (entry as { data?: unknown }).data)
+        .filter(isPermissionAuditEntry)
+        .slice(-30)
+        .map((data) => {
+          return `${data.request.toolName ?? data.request.surface}: ${data.final?.resolution ?? data.phase}${data.review ? ` — ${data.review.reasonSummary}` : ""}`;
+        });
+      await ctx.ui.select(
+        "Permission history (last 30 records)",
+        lines.length ? lines : ["No permission records on this branch"],
+      );
+    },
+  });
   pi.on("resources_discover", (event, ctx) =>
     lifecycle.handleResourcesDiscover(event, ctx),
   );
-  pi.on("session_shutdown", () => lifecycle.handleSessionShutdown());
+  pi.on("session_shutdown", () => {
+    sessionAudit.interrupt();
+    return lifecycle.handleSessionShutdown();
+  });
   pi.on("before_agent_start", (event, ctx) => agentPrep.handle(event, ctx));
-  pi.on("input", (event, ctx) => gates.handleInput(event, ctx));
-  pi.on(
-    "tool_call",
-    createFailClosedToolCall(
-      (event, ctx) => gates.handleToolCall(event, ctx),
-      reporter,
-      audit,
-      logger,
-    ),
+  pi.on("input", (event, ctx) =>
+    sessionAudit.run(ctx, event, () => gates.handleInput(event, ctx), false),
+  );
+  const checkedToolCall = createFailClosedToolCall(
+    (event, ctx) => gates.handleToolCall(event, ctx),
+    reporter,
+    audit,
+    logger,
+  );
+  pi.on("tool_call", (event, ctx) =>
+    sessionAudit.run(ctx, event, () => checkedToolCall(event, ctx)),
   );
 }

@@ -7,6 +7,10 @@
     ".": {
       "types": "./dist/public.d.ts",
       "default": "./src/service.ts"
+    },
+    "./audit": {
+      "types": "./src/service/permission-audit.ts",
+      "default": "./src/service/permission-audit.ts"
     }
   },
   "imports": {
@@ -61,12 +65,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gotgenes/pi-packages.git",
+    "url": "git+https://github.com/jianyun8023/pi-permission-packages.git",
     "directory": "packages/pi-permission-system"
   },
-  "homepage": "https://github.com/gotgenes/pi-packages/tree/main/packages/pi-permission-system#readme",
+  "homepage": "https://github.com/jianyun8023/pi-permission-packages",
   "bugs": {
-    "url": "https://github.com/gotgenes/pi-packages/issues"
+    "url": "https://github.com/jianyun8023/pi-permission-packages/issues"
   },
   "engines": {
     "node": ">=22"
@@ -98,5 +102,9 @@
     "tree-sitter-bash": "^0.25.1",
     "web-tree-sitter": "^0.26.9",
     "zod": "^4.4.3"
+  },
+  "piWebFork": {
+    "repository": "jianyun8023/pi-permission-packages",
+    "compatibility": 2
   }
 }

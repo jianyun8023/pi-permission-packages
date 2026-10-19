@@ -270,3 +270,25 @@ Thank you to the [OpenCode](https://opencode.ai) team for the permission model d
 ## License
 
 [MIT](LICENSE)
+
+## Jianyun Pi Web fork
+
+This fork preserves the upstream 41.0.0 package identity and records provenance
+with `piWebFork` plus the Pi Web release's complete file and archive hashes. It is
+consumed as a locked npm tarball, without installation-time source rewriting.
+
+RPC automatic approvals consume a request-bound, expiring, one-use in-process
+receipt before a human prompt is announced. A configured but missing
+`pi-auto-review` authorizer blocks the request. TUI decision rules are unchanged.
+
+`permission-audit/v1` custom session entries and the `permissions:audit` event
+record gate and combined tool-permission outcomes. The pure `./audit` export is
+shared with the Web UI. These entries do not enter model context and never grant
+authority. `/permission-history` shows recent branch records in TUI or RPC.
+Storage errors do not change permission decisions and are reported explicitly.
+
+Regression fixtures include equivalent cases from
+[Claude issue #91650](https://github.com/anthropics/claude-code/issues/91650):
+`cd` plus relative `sed`/`grep`, command chains and sensitive-file denies. The
+fixtures run Pi's parser and gates; they do not execute represented shell commands
+or claim to reproduce Claude's implementation.

@@ -697,3 +697,38 @@ describe("LocalUserAuthorizer", () => {
     });
   });
 });
+
+describe("RPC reviewed receipt ordering", () => {
+  it("consumes the exact receipt before announcing or opening a human dialog", async () => {
+    const { deps } = makeDeps();
+    const details = makeDetails();
+    const capability = Symbol.for("pi-permissions:rpc-reviewed-approval/v1");
+    const consume = vi.fn(
+      (id, payload) => id === details.requestId && payload === details.payload,
+    );
+    Object.assign(deps.ui, { [capability]: { version: 1, consume } });
+    const authorizer = new LocalUserAuthorizer({ ...deps, mode: "rpc" });
+    const decision = await authorizer.authorize(details);
+    expect(consume).toHaveBeenCalledOnce();
+    expect(decision.approved).toBe(true);
+    expect(decision.decidedBy.kind).toBe("authorizer");
+    expect(deps.events.emit).not.toHaveBeenCalled();
+    expect(deps.requestPermissionDecision).not.toHaveBeenCalled();
+  });
+  it("missing receipts announce the dialog immediately before asking", async () => {
+    const order: string[] = [];
+    const { deps } = makeDeps({
+      events: makeEvents(() => {
+        order.push("prompt");
+      }),
+      requestPermissionDecision: async () => {
+        order.push("ask");
+        return APPROVED;
+      },
+    });
+    await new LocalUserAuthorizer({ ...deps, mode: "rpc" }).authorize(
+      makeDetails(),
+    );
+    expect(order).toEqual(["prompt", "ask"]);
+  });
+});

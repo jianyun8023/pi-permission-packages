@@ -40,6 +40,9 @@ export class GateDecisionReporter implements DecisionReporter {
   constructor(
     private readonly logger: SessionLogger,
     private readonly events: PermissionEventBus,
+    private readonly project: (
+      event: PermissionDecisionEvent,
+    ) => PermissionDecisionEvent = (event) => event,
   ) {}
 
   writeReviewLog(event: string, details: Record<string, unknown>): void {
@@ -47,6 +50,6 @@ export class GateDecisionReporter implements DecisionReporter {
   }
 
   emitDecision(event: PermissionDecisionEvent): void {
-    emitDecisionEvent(this.events, event);
+    emitDecisionEvent(this.events, this.project(event));
   }
 }
