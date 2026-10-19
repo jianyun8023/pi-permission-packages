@@ -117,8 +117,10 @@ export function isPermissionAuditEntry(
   if (
     !object(value) ||
     value.schemaVersion !== 1 ||
-    !["gate", "tool"].includes(String(value.kind)) ||
-    !phases.has(String(value.phase))
+    !text(value.kind) ||
+    !["gate", "tool"].includes(value.kind) ||
+    !text(value.phase) ||
+    !phases.has(value.phase)
   )
     return false;
   for (const key of [
@@ -152,13 +154,15 @@ export function isPermissionAuditEntry(
   if (
     review !== undefined &&
     (!object(review) ||
-      !["allow", "deny", "defer"].includes(String(review.outcome)) ||
+      !text(review.outcome) ||
+      !["allow", "deny", "defer"].includes(review.outcome) ||
+      !text(review.reasonCode) ||
       ![
         "verdict",
         "review_timeout",
         "review_unavailable",
         "hard_deny",
-      ].includes(String(review.reasonCode)) ||
+      ].includes(review.reasonCode) ||
       !text(review.reasonSummary) ||
       !text(review.model) ||
       !Number.isFinite(review.durationMs) ||
@@ -171,9 +175,12 @@ export function isPermissionAuditEntry(
   if (
     final !== undefined &&
     (!object(final) ||
-      !["allow", "deny"].includes(String(final.result)) ||
-      !sources.has(String(final.source)) ||
-      !resolutions.has(String(final.resolution)) ||
+      !text(final.result) ||
+      !["allow", "deny"].includes(final.result) ||
+      !text(final.source) ||
+      !sources.has(final.source) ||
+      !text(final.resolution) ||
+      !resolutions.has(final.resolution) ||
       !text(final.reasonSummary))
   )
     return false;

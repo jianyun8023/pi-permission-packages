@@ -188,3 +188,53 @@ describe("session audit contract", () => {
     expect(auditText("x".repeat(2000))).toHaveLength(800);
   });
 });
+
+it("forwarded asks retain requester and adjudicator identities and duplicate finals are ignored", () => {
+  const f = fixture("parent");
+  f.logger.review("forwarded_permission.prompted", {
+    requestId: "child-r",
+    requesterSessionId: "child",
+  });
+  f.logger.review("pi_auto_review_decision", {
+    requestId: "child-r",
+    reviewerOutcome: "defer",
+    rationale: "Need human choice",
+    attempts: 1,
+  });
+  f.audit.decision({
+    ...decision("child-r"),
+    forwarding: { requesterSessionId: "child", requesterAgentName: "worker" },
+  });
+  f.audit.decision(decision("child-r"));
+  const final = f.saved.filter((e) => e.requestId === "child-r" && e.final);
+  expect(final).toHaveLength(1);
+  expect(final[0].sessionId).toBe("child");
+  expect(final[0].adjudicatorSessionId).toBe("parent");
+});
+it("missing reviewer and timeout keep distinct system/model reasons", () => {
+  const f = fixture();
+  f.logger.review("authorizer_chain_unregistered_link", {
+    requestId: "missing",
+    name: "pi-auto-review",
+  });
+  f.audit.decision({
+    ...decision("missing", "deny"),
+    resolution: "authorizer_denied",
+  });
+  expect(f.saved.at(-1)?.final?.resolution).toBe("reviewer_not_registered");
+  f.logger.review("pi_auto_review_decision", {
+    requestId: "timeout",
+    reviewerOutcome: "defer",
+    unavailable: true,
+    retryErrors: ["timeout"],
+    attempts: 1,
+  });
+  f.audit.decision({ ...decision("timeout"), resolution: "user_approved" });
+  expect(f.saved.at(-1)?.review?.reasonCode).toBe("review_timeout");
+  expect(f.saved.at(-1)?.final?.source).toBe("human");
+});
+it("malformed JSON objects cannot run coercion during schema validation", () => {
+  expect(
+    isPermissionAuditEntry({ schemaVersion: 1, kind: { toString: "invalid" } }),
+  ).toBe(false);
+});

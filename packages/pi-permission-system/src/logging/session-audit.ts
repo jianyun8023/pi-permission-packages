@@ -93,7 +93,6 @@ export class SessionPermissionAudit {
     this.generationId = randomUUID();
     this.ctx = ctx;
     this.warned = false;
-    this.finished.clear();
   }
 
   async run<T>(
@@ -161,7 +160,9 @@ export class SessionPermissionAudit {
     facts: Record<string, unknown>,
     context = this.calls.getStore() ?? this.fallback(facts),
   ): Pending {
-    const requester = string(facts.requesterSessionId);
+    const requester =
+      string(facts.requesterSessionId) ??
+      string(record(facts.forwarding).requesterSessionId);
     return {
       context,
       reason: "",
@@ -231,6 +232,7 @@ export class SessionPermissionAudit {
     if (!state) {
       if (
         event !== "permission_request.waiting" &&
+        event !== "forwarded_permission.prompted" &&
         event !== "pi_auto_review_decision" &&
         event !== "authorizer_chain_unregistered_link"
       )
@@ -238,7 +240,10 @@ export class SessionPermissionAudit {
       state = this.create(id, facts);
       this.pending.set(id, state);
     }
-    if (event === "permission_request.waiting") {
+    if (
+      event === "permission_request.waiting" ||
+      event === "forwarded_permission.prompted"
+    ) {
       state.entry.request = this.create(id, facts, state.context).entry.request;
       this.write(state, "started");
     }
