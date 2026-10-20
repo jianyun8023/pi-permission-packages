@@ -268,6 +268,14 @@ const dialogKeysSchema = z
       description:
         "Key that approves for the session in both directions. Default: b.",
     }),
+    approveProjectCommand: z.string().optional().meta({
+      description:
+        "Key that allows and saves an eligible exact command for this project. Default: p.",
+    }),
+    approveGlobalCommand: z.string().optional().meta({
+      description:
+        "Key that allows and saves an eligible exact command globally. Default: g.",
+    }),
     deny: z.string().optional().meta({
       description: "Key that denies the pending call. Default: n.",
     }),

@@ -130,16 +130,18 @@ No debug output is printed to the terminal.
 
 In an interactive **TUI** session, an `ask` decision opens an inline keybind dialog with one-key shortcuts:
 
-| Key | Action                                                            |
-| --- | ----------------------------------------------------------------- |
-| `y` | Approve once                                                      |
-| `s` | Approve for this session, in the direction the gate proved        |
-| `b` | Approve for this session in **both** directions (see below)       |
-| `n` | Deny                                                              |
-| `r` | Deny with a reason (opens an inline editor; a reason is required) |
+| Key | Action                                                             |
+| --- | ------------------------------------------------------------------ |
+| `y` | Approve once                                                       |
+| `s` | Approve for this session, in the direction the gate proved         |
+| `p` | Approve and add an eligible exact command to the project allowlist |
+| `g` | Approve and add an eligible exact command to the global allowlist  |
+| `b` | Approve for this session in **both** directions (see below)        |
+| `n` | Deny                                                               |
+| `r` | Deny with a reason (opens an inline editor; a reason is required)  |
 
 `b` appears only for an ask whose paths all prove the same direction — a read or a write, but not both.
-Every other ask shows the four options above without it.
+The `p` and `g` options appear only for eligible commands, as described in [persistent command approval](#persistent-command-approval).
 See [session-approvals.md](session-approvals.md#grant-direction) for what the two widths grant.
 
 Arrow keys / `j`/`k` move the highlight, `enter` confirms the highlighted option, and `esc` denies.
@@ -156,13 +158,16 @@ Set `permissionDialogKeys` to bind any decision to a different key:
     "approve": "1",
     "approveSession": "2",
     "approveSessionBoth": "3",
+    "approveProjectCommand": "6",
+    "approveGlobalCommand": "7",
     "deny": "4",
     "denyWithReason": "5"
   }
 }
 ```
 
-The five decision names above are the only keys the map accepts, and each is optional — a decision you do not name keeps its default letter.
+The seven decision names above are the only keys the map accepts, and each is optional.
+A decision you do not name keeps its default letter.
 
 This exists for input method editors.
 While an IME is composing — Chinese Pinyin or Wubi, Japanese, Korean — a letter keypress is consumed by the candidate buffer and never reaches the terminal, so `y` and `n` do nothing and the dialog looks frozen.
@@ -235,6 +240,25 @@ Only interactive TUI sessions signal; outside interactive mode Pi routes stdout 
 Inside tmux, prefer `"bell"`: tmux passes a BEL through to its own bell handling, but drops OSC notifications unless passthrough is enabled.
 
 To run a program instead (Herdr, `cmux notify`, a push to your phone), write a small extension on the `permissions:ui_prompt` and `permissions:decision` broadcasts; see the [recipe](cross-extension-api.md#recipe-bridging-a-prompt-to-an-external-notifier).
+
+### Persistent command approval
+
+This fork offers **Yes, add to project allowlist** and **Yes, add to global allowlist** in the RPC select dialog and the TUI.
+Each option shows the complete exact command it will save; it does not shorten arguments or introduce a wildcard.
+The choices are available only for local bash command asks that have no wrapper floor, nested/compound execution, shell expansion, redirection, wildcard characters, or unresolved parsing.
+Forwarded and named-agent requests retain their existing once/session choices.
+
+Project rules are written to `<cwd>/.pi/extensions/pi-permission-system/config.json` and are offered only in a trusted project.
+Global rules are written to `~/.pi/agent/extensions/pi-permission-system/config.json` (respecting `PI_CODING_AGENT_DIR`).
+Both use the existing `permission.bash` map and are read by subsequent calls and sessions without a reload.
+Higher-precedence project or agent restrictions can still require approval for a global rule.
+Path checks remain separate, and saving a command cannot replace a matching deny in the loaded global or project configuration.
+
+Only an explicit human choice writes a rule; model approvals, single-use receipts, and ordinary once/session approval do not persist anything.
+The writer validates the existing config, preserves unrelated settings, rejects symlinked targets, serializes cooperating writers with a lock, and replaces the file atomically.
+If saving fails, the request remains unapproved and the prompt reports the failure; choosing approval once on a subsequent attempt does not require saving a rule.
+The review log records `command_rule.saved` or `command_rule.save_failed` with the request ID and scope.
+Remove a saved command from the corresponding `permission.bash` map to revoke it.
 
 ### Unanswered prompts
 

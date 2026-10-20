@@ -65,6 +65,9 @@ All permissions use one of three states:
 | `ask`   | Prompts the user for confirmation via UI |
 
 When the dialog prompts, you can approve once or approve a pattern for the rest of the session.
+This fork also offers project and global allowlist choices for eligible exact bash commands, with the complete rule shown in the option.
+These choices save an ordinary `permission.bash` rule to the selected scope, effective on subsequent calls and sessions; path gates and deny rules remain independent.
+See [persistent command approval](docs/configuration.md#persistent-command-approval) for eligibility and scope.
 In an interactive TUI session the prompt is an inline keybind dialog — `y` approve, `s` approve for this session, `n` deny, `r` deny with a reason — where each hotkey arms and a second press confirms (configurable via `doublePressToConfirm`).
 The hotkeys themselves are remappable through `permissionDialogKeys`, which matters if you type with an input method editor: composition mode swallows letter keys before they reach the terminal, and digits do not.
 Set `promptNotifications` (for example `["bell"]`) and the dialog also rings the terminal as it opens, so a session waiting on you in another tab or pane gets flagged.
@@ -214,7 +217,8 @@ The [architecture doc](https://github.com/gotgenes/pi-packages/blob/main/package
 
 **One decision is still open.**
 How policy may _enter_ the system — which channels are admissible, and with what precedence — is being worked out in [issue #799](https://github.com/gotgenes/pi-packages/issues/799).
-Several requested widenings are parked on it rather than declined, durable persistence of an approval among them.
+Upstream parks several requested widenings on it, including durable persistence of an approval.
+This fork implements the limited, human-selected exact-command persistence described above using the existing scoped policy files.
 The companion question — whether a capability model replaces the actor-keyed surface list — is settled: [ADR 0013](https://github.com/gotgenes/pi-packages/blob/main/packages/pi-permission-system/docs/decisions/0013-permission-policy-model.md) adds read/write as an axis beside the existing keys, so a policy can permit reading a path without also permitting writes to it.
 
 **Where adjacent requests belong.**
@@ -273,22 +277,20 @@ Thank you to the [OpenCode](https://opencode.ai) team for the permission model d
 
 ## Jianyun Pi Web fork
 
-This fork preserves the upstream 41.0.0 package identity and records provenance
-with `piWebFork` plus the Pi Web release's complete file and archive hashes. It is
-consumed as a locked npm tarball, without installation-time source rewriting.
+This fork preserves the upstream 41.0.0 package identity and records provenance with `piWebFork` plus the Pi Web release's complete file and archive hashes.
+It is consumed as a locked npm tarball, without installation-time source rewriting.
 
-RPC automatic approvals consume a request-bound, expiring, one-use in-process
-receipt before a human prompt is announced. A configured but missing
-`pi-auto-review` authorizer blocks the request. TUI decision rules are unchanged.
+RPC automatic approvals consume a request-bound, expiring, one-use in-process receipt before a human prompt is announced.
+A configured but missing `pi-auto-review` authorizer blocks the request.
+TUI decision rules are unchanged.
 
-`permission-audit/v1` custom session entries and the `permissions:audit` event
-record gate and combined tool-permission outcomes. The pure `./audit` export is
-shared with the Web UI. These entries do not enter model context and never grant
-authority. `/permission-history` shows recent branch records in TUI or RPC.
+`permission-audit/v1` custom session entries and the `permissions:audit` event record gate and combined tool-permission outcomes.
+The pure `./audit` export is shared with the Web UI.
+These entries do not enter model context and never grant authority.
+`/permission-history` shows recent branch records in TUI or RPC.
 Storage errors do not change permission decisions and are reported explicitly.
 
 Regression fixtures include equivalent cases from
 [Claude issue #91650](https://github.com/anthropics/claude-code/issues/91650):
-`cd` plus relative `sed`/`grep`, command chains and sensitive-file denies. The
-fixtures run Pi's parser and gates; they do not execute represented shell commands
-or claim to reproduce Claude's implementation.
+`cd` plus relative `sed`/`grep`, command chains and sensitive-file denies.
+The fixtures run Pi's parser and gates; they do not execute represented shell commands or claim to reproduce Claude's implementation.

@@ -4,6 +4,7 @@ import type { AuthorizerLog, PermissionQuery } from "#src/service";
 import type { PermissionEventBus } from "#src/service/permission-events";
 import { ParentAuthorizer } from "./approval-escalator";
 import type { AskDialogAdmission } from "./ask-dialog-queue";
+import type { CommandRulePromptApi } from "./command-rule-prompt";
 import { DenyingAuthorizer } from "./denying-authorizer";
 import { getSessionId } from "./forwarder-context";
 import type { TargetServingLookup } from "./forwarding-liveness";
@@ -107,6 +108,7 @@ export interface SelectedAuthority {
 
 /** Construction inputs for {@link selectAuthorizer}. */
 export interface AuthorizerSelectionDeps {
+  commandRulesFor?: (ctx: ExtensionContext) => CommandRulePromptApi;
   /** Single owner of subagent detection; the ParentAuthorizer-selection predicate. */
   detection: SubagentDetector;
   /** Event bus used by `LocalUserAuthorizer` for the `permissions:ui_prompt` broadcast. */
@@ -152,6 +154,7 @@ export function selectAuthorizer(
     if (relayTarget === null) {
       return {
         terminal: new LocalUserAuthorizer({
+          commandRules: deps.commandRulesFor?.(ctx),
           ui: ctx.ui,
           mode: ctx.mode,
           events: deps.events,

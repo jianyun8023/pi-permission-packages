@@ -46,6 +46,14 @@
           "description": "Key that approves for the session in both directions. Default: b.",
           "type": "string"
         },
+        "approveProjectCommand": {
+          "description": "Key that allows and saves an eligible exact command for this project. Default: p.",
+          "type": "string"
+        },
+        "approveGlobalCommand": {
+          "description": "Key that allows and saves an eligible exact command globally. Default: g.",
+          "type": "string"
+        },
         "deny": {
           "description": "Key that denies the pending call. Default: n.",
           "type": "string"

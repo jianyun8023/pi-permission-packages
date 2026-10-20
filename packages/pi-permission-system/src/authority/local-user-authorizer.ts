@@ -17,6 +17,7 @@ import { buildUiPrompt } from "#src/service/permission-ui-prompt";
 import { provenDirectionOf } from "#src/session/approval-grant";
 import type { AskDialogAdmission } from "./ask-dialog-queue";
 import type { TerminalAuthorizer } from "./authorizer";
+import type { CommandRulePromptApi } from "./command-rule-prompt";
 import type {
   PermissionPromptDecision,
   RequestPermissionOptions,
@@ -31,6 +32,7 @@ import { consumeRpcReviewedApproval } from "./rpc-reviewed-approval";
 
 /** Dependencies required by {@link LocalUserAuthorizer}. */
 export interface LocalUserAuthorizerDeps {
+  commandRules?: CommandRulePromptApi;
   /** The active session's UI surface (select/input plus the inline `custom` dialog). */
   ui: PermissionPromptUi;
   /** The session run mode; the dispatcher renders the inline dialog only in `"tui"`. */
@@ -93,14 +95,16 @@ export class LocalUserAuthorizer implements TerminalAuthorizer {
   }
 
   /** Announce only when the queued human dialog is actually about to open. */
-  private present(
+  private async present(
     details: PromptPermissionDetails,
   ): Promise<PermissionPromptDecision> {
     emitUiPromptEvent(this.deps.events, buildUiPrompt(details));
     const title = details.forwarding
       ? "Permission Required (Subagent)"
       : "Permission Required";
-    return this.deps.requestPermissionDecision(
+    const commandRule = this.deps.commandRules?.offer(details);
+    const options = buildRequestOptions(details);
+    const decision = await this.deps.requestPermissionDecision(
       {
         mode: this.deps.mode,
         ui: this.deps.ui,
@@ -113,9 +117,21 @@ export class LocalUserAuthorizer implements TerminalAuthorizer {
       },
       title,
       details.payload,
-      buildRequestOptions(details),
+      commandRule ? { ...options, commandRule } : options,
       ...(this.deps.mode === "rpc" ? ([details.requestId] as const) : []),
     );
+    if (decision.approved && decision.saveCommandRule) {
+      if (!commandRule || decision.decidedBy.kind !== "user") {
+        return releasedDecision(
+          "No local human command-rule approval was available.",
+        );
+      }
+      return (
+        this.deps.commandRules?.save(details, decision.saveCommandRule) ??
+        decision
+      );
+    }
+    return decision;
   }
 }
 

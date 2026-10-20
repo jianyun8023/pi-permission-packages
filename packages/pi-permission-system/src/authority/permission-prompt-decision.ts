@@ -31,13 +31,11 @@ const OPTION_ORDER: readonly PromptAction[] = [
   "approve",
   "approveSession",
   "approveSessionBoth",
+  "approveProjectCommand",
+  "approveGlobalCommand",
   "deny",
   "denyWithReason",
 ];
-
-const NARROW_OPTION_ORDER: readonly PromptAction[] = OPTION_ORDER.filter(
-  (action) => action !== "approveSessionBoth",
-);
 
 /**
  * The decision step's options, in display order.
@@ -53,13 +51,23 @@ const NARROW_OPTION_ORDER: readonly PromptAction[] = OPTION_ORDER.filter(
 export function visibleActions(
   config: PromptModelConfig,
 ): readonly PromptAction[] {
-  return config.widthLabel ? OPTION_ORDER : NARROW_OPTION_ORDER;
+  return OPTION_ORDER.filter((action) =>
+    action === "approveSessionBoth"
+      ? !!config.widthLabel
+      : action === "approveProjectCommand"
+        ? !!config.commandRule?.project
+        : action === "approveGlobalCommand"
+          ? !!config.commandRule
+          : true,
+  );
 }
 
 const OPTION_VERBS: Record<PromptAction, string> = {
   approve: "approve",
   approveSession: "approve for this session",
   approveSessionBoth: "approve both directions for this session",
+  approveProjectCommand: "approve and save this exact command for this project",
+  approveGlobalCommand: "approve and save this exact command globally",
   deny: "deny",
   denyWithReason: "deny with a reason",
 };
@@ -84,6 +92,7 @@ export interface PromptModelConfig {
    * single direction supplies none, and the roster stays four keys.
    */
   widthLabel?: string;
+  commandRule?: RequestPermissionOptions["commandRule"];
   /**
    * Forwarded asks only: when set, confirming `s` opens a second step choosing
    * whether the grant applies to the requesting subagent only (least-privilege
@@ -221,6 +230,17 @@ function commit(
       return {
         kind: "decision",
         decision: { approved: true, state: "approved" },
+      };
+    case "approveProjectCommand":
+    case "approveGlobalCommand":
+      return {
+        kind: "decision",
+        decision: {
+          approved: true,
+          state: "approved",
+          saveCommandRule:
+            action === "approveProjectCommand" ? "project" : "global",
+        },
       };
     case "deny":
       return { kind: "decision", decision: createDeniedPermissionDecision() };

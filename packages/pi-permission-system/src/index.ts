@@ -11,6 +11,7 @@ import {
 } from "#src/authority/authorizer-registry";
 import { AuthorizerSelection } from "#src/authority/authorizer-selection";
 import { ChildNodeAudit } from "#src/authority/child-node-audit";
+import { CommandRulePrompt } from "#src/authority/command-rule-prompt";
 import { ForwardedRequestServer } from "#src/authority/forwarded-request-server";
 import {
   ForwardingLivenessJudge,
@@ -32,6 +33,7 @@ import {
 import { SubagentDetection } from "#src/authority/subagent-detection";
 import { subscribeSubagentLifecycle } from "#src/authority/subagent-lifecycle-events";
 import { getSubagentSessionRegistry } from "#src/authority/subagent-registry";
+import { CommandRuleStore } from "#src/config/command-rule-store";
 import { ConfigIssueReporter } from "#src/config/config-issue-reporter";
 import { registerPermissionSystemCommand } from "#src/config/config-modal";
 import { getGlobalConfigPath } from "#src/config/config-paths";
@@ -160,6 +162,8 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
   });
 
   const authorizerSelection = new AuthorizerSelection({
+    commandRulesFor: (ctx) =>
+      new CommandRulePrompt(ctx, new CommandRuleStore(agentDir), logger),
     detection: subagentDetection,
     events: pi.events,
     dialogs: askDialogQueue,

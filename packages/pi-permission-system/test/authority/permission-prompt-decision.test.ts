@@ -624,6 +624,7 @@ describe("reducePrompt", () => {
 
   describe("bound characters", () => {
     const REMAPPED = {
+      ...DEFAULT_DIALOG_KEYS,
       approve: "1",
       approveSession: "2",
       approveSessionBoth: "3",

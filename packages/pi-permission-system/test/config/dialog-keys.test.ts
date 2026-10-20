@@ -108,6 +108,8 @@ describe("resolveDialogKeys", () => {
           approve: "1",
           approveSession: "2",
           approveSessionBoth: "3",
+          approveProjectCommand: "p",
+          approveGlobalCommand: "g",
           deny: "4",
           denyWithReason: "5",
         },

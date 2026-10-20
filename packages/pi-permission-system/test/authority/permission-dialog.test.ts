@@ -41,6 +41,61 @@ describe("isPermissionDecisionState", () => {
 });
 
 describe("requestPermissionDecisionFromUi", () => {
+  it.each(["project", "global"] as const)(
+    "offers an explicit %s command rule and records only the selected scope",
+    async (scope) => {
+      const commandRule = {
+        command: "git fetch origin",
+        project: "Yes, add to project allowlist: git fetch origin",
+        global: "Yes, add to global allowlist: git fetch origin",
+      };
+      const ui: PermissionDecisionUi = {
+        select: vi.fn().mockResolvedValue(commandRule[scope]),
+        input: vi.fn(),
+      };
+      const result = await requestPermissionDecisionFromUi(
+        ui,
+        "Title",
+        "Message",
+        { commandRule },
+      );
+      expect(ui.select).toHaveBeenCalledWith(
+        "Title\nMessage",
+        [
+          "Yes",
+          "Yes, for this session",
+          commandRule.project,
+          commandRule.global,
+          "No",
+          "No, provide reason",
+        ],
+        { signal: undefined },
+      );
+      expect(result).toEqual({
+        approved: true,
+        state: "approved",
+        saveCommandRule: scope,
+      });
+    },
+  );
+
+  it("does not accept a project rule selection when the project option is absent", async () => {
+    const ui: PermissionDecisionUi = {
+      select: vi
+        .fn()
+        .mockResolvedValue("Yes, add to project allowlist: git fetch origin"),
+      input: vi.fn(),
+    };
+    expect(
+      await requestPermissionDecisionFromUi(ui, "Title", "Message", {
+        commandRule: {
+          command: "git fetch origin",
+          global: "Yes, add to global allowlist: git fetch origin",
+        },
+      }),
+    ).toEqual({ approved: false, state: "denied" });
+  });
+
   it("returns approved when user selects Yes", async () => {
     const ui: PermissionDecisionUi = {
       select: vi.fn().mockResolvedValue("Yes"),

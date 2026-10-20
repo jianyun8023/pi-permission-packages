@@ -11,6 +11,8 @@ export type PermissionDecisionState =
 export type PermissionPromptDecision = {
   approved: boolean;
   state: PermissionDecisionState;
+  /** A human-selected exact command rule; the local terminal must save it before allowing. */
+  saveCommandRule?: "project" | "global";
   denialReason?: string;
   /**
    * True when no human ever ruled on this ask: either no live authority was
@@ -135,12 +137,18 @@ export function isPermissionDecisionState(
 }
 
 export interface RequestPermissionOptions {
+  /** Only supplied for a local, fully parsed command that can be saved exactly. */
+  commandRule?: {
+    command: string;
+    project?: string;
+    global: string;
+  };
   /** Override the "for this session" option label (e.g. to show the suggested pattern). */
   sessionLabel?: string;
   /**
    * Present iff this ask's session grant can be widened to both directions:
    * its label is the extra option shown beside the proven-direction one
-   * (#813). Absent leaves the prompt exactly four options.
+   * (#813). Absent leaves four basic options, plus any command-rule options.
    */
   sessionWidth?: { label: string };
   /**
@@ -175,10 +183,13 @@ export async function requestPermissionDecisionFromUi(
     answer === undefined && signal?.aborted === true;
   const sessionOption = options?.sessionLabel ?? APPROVE_FOR_SESSION_OPTION;
   const widthOption = options?.sessionWidth?.label;
+  const commandRule = options?.commandRule;
   const decisionOptions = [
     APPROVE_OPTION,
     sessionOption,
     ...(widthOption ? [widthOption] : []),
+    ...(commandRule?.project ? [commandRule.project] : []),
+    ...(commandRule ? [commandRule.global] : []),
     DENY_OPTION,
     DENY_WITH_REASON_OPTION,
   ];
@@ -196,6 +207,18 @@ export async function requestPermissionDecisionFromUi(
     return {
       approved: true,
       state: "approved",
+    };
+  }
+
+  if (
+    commandRule &&
+    selected !== undefined &&
+    (selected === commandRule.project || selected === commandRule.global)
+  ) {
+    return {
+      approved: true,
+      state: "approved",
+      saveCommandRule: selected === commandRule.project ? "project" : "global",
     };
   }
 

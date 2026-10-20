@@ -60,6 +60,40 @@ type PromptFactory = (
 /** Pi's default binding for the `app.tools.expand` action. */
 const CTRL_O = "\u000f";
 
+describe("persistent command choices in the TUI", () => {
+  it.each([
+    ["p", "project"],
+    ["g", "global"],
+  ] as const)(
+    "shows the exact command and confirms %s twice",
+    async (key, scope) => {
+      const { view, captured } = makeFakeView(true);
+      const commandRule = {
+        command: "git fetch origin",
+        project: "Yes, add to project allowlist: git fetch origin",
+        global: "Yes, add to global allowlist: git fetch origin",
+      };
+      const result = presentInlinePermissionPrompt(
+        view,
+        "Permission Required",
+        makePromptPayload(),
+        { commandRule },
+      );
+      expect(captured.component?.render(160).join("\n")).toContain(
+        commandRule[scope],
+      );
+      captured.component?.handleInput(key);
+      expect(captured.done).not.toHaveBeenCalled();
+      captured.component?.handleInput(key);
+      expect(await result).toEqual({
+        approved: true,
+        state: "approved",
+        saveCommandRule: scope,
+      });
+    },
+  );
+});
+
 /** The preferences a fake view overrides, plus the key bound to tool expansion. */
 interface FakeViewOptions extends Partial<PromptPreferences> {
   expandKey?: string;
@@ -266,6 +300,7 @@ describe("presentInlinePermissionPrompt", () => {
 
   describe("configured hotkey bindings", () => {
     const DIGITS = {
+      ...DEFAULT_DIALOG_KEYS,
       approve: "1",
       approveSession: "2",
       approveSessionBoth: "3",

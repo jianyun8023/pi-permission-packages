@@ -239,6 +239,8 @@ const OPTION_LABELS: Record<PromptAction, string> = {
   approve: "Yes",
   approveSession: DEFAULT_SESSION_LABEL,
   approveSessionBoth: "Yes, for this session in both directions",
+  approveProjectCommand: "Yes, add command to project allowlist",
+  approveGlobalCommand: "Yes, add command to global allowlist",
   deny: "No",
   denyWithReason: "No, provide reason",
 };
@@ -260,6 +262,7 @@ export function presentInlinePermissionPrompt(
     sessionLabel: options?.sessionLabel ?? DEFAULT_SESSION_LABEL,
     widthLabel: options?.sessionWidth?.label,
     sessionScope: options?.sessionScope,
+    commandRule: options?.commandRule,
     keys: view.dialogKeys,
   };
   return view.ui.custom<UnattributedDecision | undefined>(
@@ -546,6 +549,10 @@ class PermissionPromptComponent implements Component {
     if (action === "approveSessionBoth") {
       return this.config.widthLabel ?? OPTION_LABELS.approveSessionBoth;
     }
+    if (action === "approveProjectCommand")
+      return this.config.commandRule?.project ?? OPTION_LABELS[action];
+    if (action === "approveGlobalCommand")
+      return this.config.commandRule?.global ?? OPTION_LABELS[action];
     return OPTION_LABELS[action];
   }
 

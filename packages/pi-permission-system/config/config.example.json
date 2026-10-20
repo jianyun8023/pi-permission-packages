@@ -9,6 +9,8 @@
     "approve": "y",
     "approveSession": "s",
     "approveSessionBoth": "b",
+    "approveProjectCommand": "p",
+    "approveGlobalCommand": "g",
     "deny": "n",
     "denyWithReason": "r"
   },

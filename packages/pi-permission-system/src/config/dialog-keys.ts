@@ -7,15 +7,17 @@
  */
 
 /**
- * The dialog's five decisions, named by what they do.
+ * The dialog's seven decisions, named by what they do.
  *
  * Distinct from the character that selects one: a binding is configurable and
- * an identity is not, so a rebound dialog still decides the same five things.
+ * an identity is not, so a rebound dialog still decides the same seven things.
  */
 export type PromptAction =
   | "approve"
   | "approveSession"
   | "approveSessionBoth"
+  | "approveProjectCommand"
+  | "approveGlobalCommand"
   | "deny"
   | "denyWithReason";
 
@@ -42,6 +44,8 @@ const ACTION_ORDER: readonly PromptAction[] = [
   "approve",
   "approveSession",
   "approveSessionBoth",
+  "approveProjectCommand",
+  "approveGlobalCommand",
   "deny",
   "denyWithReason",
 ];
@@ -51,6 +55,8 @@ export const DEFAULT_DIALOG_KEYS: DialogKeyBindings = {
   approve: "y",
   approveSession: "s",
   approveSessionBoth: "b",
+  approveProjectCommand: "p",
+  approveGlobalCommand: "g",
   deny: "n",
   denyWithReason: "r",
 };
@@ -133,7 +139,7 @@ export function resolveDialogKeys(
   // Dropping an override restores its default, and that default can collide
   // with an override that survived the previous look — so this settles rather
   // than checks once. Each round drops at least one override and there are at
-  // most five, and the all-defaults state it terminates at is collision-free.
+  // most seven, and the all-defaults state it terminates at is collision-free.
   for (let round = ACTION_ORDER.length; round > 0; round--) {
     const contested = contestedCharacters(accepted);
     if (contested.size === 0) break;
