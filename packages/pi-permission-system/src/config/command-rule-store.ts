@@ -62,16 +62,12 @@ export class CommandRuleStore {
       const patterns: Record<string, PatternValue> =
         typeof bash === "string" ? { "*": bash } : { ...bash };
       // Reinsert an existing exact ask last, preserving every other rule.
-      const retained = Object.fromEntries(
-        Object.entries(patterns).filter(
-          ([command]) => command !== request.command,
-        ),
-      );
+      delete patterns[request.command];
       const updated = {
         ...existing,
         permission: {
           ...permission,
-          bash: { ...retained, [request.command]: "allow" as const },
+          bash: { ...patterns, [request.command]: "allow" as const },
         },
       };
       writeFileSync(temporary, `${JSON.stringify(updated, null, 2)}\n`, {
