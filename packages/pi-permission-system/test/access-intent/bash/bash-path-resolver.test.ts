@@ -86,13 +86,8 @@ describe("BashPathResolver argument spellings", () => {
       ]);
     });
 
-    it("for a slash-bearing word that is not a path, since shape decides", async () => {
-      // A branch name looks like a relative path, so it is spelled too; only a
-      // rule naming the spelled form (`git push origin /projects/my-app/*`)
-      // could match it.
-      expect(await spellingsOf("git push origin feature/x")).toEqual([
-        ["feature/x", "/projects/my-app/feature/x"],
-      ]);
+    it("does not spell a Git push refspec as a path", async () => {
+      expect(await spellingsOf("git push origin feature/x")).toEqual([]);
     });
 
     it("with a parent segment resolved to the file that runs", async () => {
@@ -183,4 +178,55 @@ describe("BashPathResolver argument spellings", () => {
       }
     });
   });
+});
+
+async function pathTokensOf(command: string): Promise<string[]> {
+  const tree = (await getParser()).parse(command);
+  if (!tree) throw new Error("parse returned null");
+  try {
+    const words = new WordReader(ShellVariables.scan([tree.rootNode]));
+    return new BashPathResolver(posix, words)
+      .resolve(tree.rootNode, [], command)
+      .ruleCandidates.map((candidate) => candidate.token);
+  } finally {
+    tree.delete();
+  }
+}
+
+describe("typed repository and revision operands", () => {
+  it.each([
+    "git rev-list --count HEAD...origin/fix/workflow-edge-auth-1031",
+    "git diff --stat HEAD...origin/fix/workflow-edge-auth-1031",
+    "git checkout -b fix/workflow-edge-auth-1031",
+    "tea pulls create --repo wanwu-ai/wanwu --head fix/workflow-edge-auth-1031 --base next/20261031",
+    "tea pulls edit 71 --repo=wanwu-ai/wanwu --head=fix/workflow-edge-auth-1031",
+  ])("does not project identifiers as file paths: %s", async (command) => {
+    expect(await pathTokensOf(command)).toEqual([]);
+  });
+
+  it.each([
+    ["git diff HEAD...origin/fix/x -- docs/workflow.md", ["docs/workflow.md"]],
+    ["git diff --no-index ./old/file ./new/file", ["./old/file", "./new/file"]],
+    ["git diff --output=./patch/file HEAD...origin/fix/x", ["./patch/file"]],
+    [
+      "tea pulls create --repo wanwu-ai/wanwu --description-file /tmp/pr.md",
+      ["/tmp/pr.md"],
+    ],
+    ['tea pulls create --repo "$(cat /etc/shadow)"', ["/etc/shadow"]],
+    [
+      "git fetch --multiple /tmp/one /tmp/two /tmp/three",
+      ["/tmp/one", "/tmp/two", "/tmp/three"],
+    ],
+    ["git rev-list $OPTIONS /tmp/private", ["/tmp/private"]],
+    [
+      "git diff origin/feature -- docs/real.md",
+      ["origin/feature", "docs/real.md"],
+    ],
+    ["./git rev-list HEAD...origin/fix/x", ["HEAD...origin/fix/x"]],
+  ])(
+    "keeps actual path and nested execution operands: %s",
+    async (command, expected) => {
+      expect(await pathTokensOf(command)).toEqual(expected);
+    },
+  );
 });

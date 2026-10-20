@@ -57,7 +57,7 @@ export interface LocalUserAuthorizerDeps {
  * class renders (populated `forwarding` context + "(Subagent)" title) so the
  * broadcast stays non-degraded (#292) without a second emission path.
  *
- * Every ask goes through the session's `AskDialogAdmission`, because the host
+ * Every human ask goes through the session's `AskDialogAdmission`, because the host
  * holds one inline dialog slot: a second presentation mounts over the first and
  * strands its promise (#965).
  */
@@ -67,22 +67,9 @@ export class LocalUserAuthorizer implements TerminalAuthorizer {
   authorize(
     details: PromptPermissionDetails,
   ): Promise<PermissionPromptDecision> {
-    return this.deps.dialogs.run(() => this.present(details), releasedDecision);
-  }
-
-  /**
-   * Announce the imminent prompt, then show it.
-   *
-   * Both live inside the queued region: `permissions:ui_prompt` is documented
-   * as firing immediately before the user-facing UI is invoked, so an emit at
-   * admission would alert a notification consumer for a dialog that is still
-   * minutes of deliberation away.
-   */
-  private present(
-    details: PromptPermissionDetails,
-  ): Promise<PermissionPromptDecision> {
-    // A receipt is consumed before announcing a human prompt. Observers must
-    // never report an automatic decision as a dialog shown to the user.
+    // Consume the exact one-use receipt before queue admission: unrelated
+    // human deliberation must not expire an already completed review. The
+    // capability itself checks owner, cancellation, fingerprint, and TTL.
     if (
       this.deps.mode === "rpc" &&
       consumeRpcReviewedApproval(
@@ -102,6 +89,13 @@ export class LocalUserAuthorizer implements TerminalAuthorizer {
         },
       });
     }
+    return this.deps.dialogs.run(() => this.present(details), releasedDecision);
+  }
+
+  /** Announce only when the queued human dialog is actually about to open. */
+  private present(
+    details: PromptPermissionDetails,
+  ): Promise<PermissionPromptDecision> {
     emitUiPromptEvent(this.deps.events, buildUiPrompt(details));
     const title = details.forwarding
       ? "Permission Required (Subagent)"

@@ -732,3 +732,52 @@ describe("RPC reviewed receipt ordering", () => {
     expect(order).toEqual(["prompt", "ask"]);
   });
 });
+
+describe("RPC receipts bypass the human dialog queue", () => {
+  it("settles a reviewed request while an unrelated human prompt remains open", async () => {
+    const { deps, dialogs, decisionFn, events } = makeDeps({
+      requestPermissionDecision: vi.fn<typeof requestPermissionDecision>(
+        () => new Promise(() => undefined),
+      ),
+    });
+    const details = makeDetails({ requestId: "reviewed" });
+    const consume = vi.fn(
+      (id, payload) => id === details.requestId && payload === details.payload,
+    );
+    Object.assign(deps.ui, {
+      [Symbol.for("pi-permissions:rpc-reviewed-approval/v1")]: {
+        version: 1,
+        consume,
+      },
+    });
+    const authorizer = new LocalUserAuthorizer({ ...deps, mode: "rpc" });
+    const human = authorizer.authorize(makeDetails({ requestId: "human" }));
+    await settleMicrotasks();
+    let automatic: PermissionPromptDecision | undefined;
+    const reviewed = authorizer.authorize(details).then((value) => {
+      automatic = value;
+    });
+    await settleMicrotasks();
+    // Release outstanding work even if the regression assertion below fails.
+    dialogs.releaseAll("test cleanup");
+    await Promise.all([human, reviewed]);
+    expect(automatic?.decidedBy.kind).toBe("authorizer");
+    expect(decisionFn).toHaveBeenCalledTimes(1);
+    expect(events.emit).toHaveBeenCalledTimes(1);
+    expect(consume).toHaveBeenCalledWith("reviewed", details.payload);
+  });
+
+  it("does not consume RPC receipts in a terminal session", async () => {
+    const { deps } = makeDeps();
+    const consume = vi.fn(() => true);
+    Object.assign(deps.ui, {
+      [Symbol.for("pi-permissions:rpc-reviewed-approval/v1")]: {
+        version: 1,
+        consume,
+      },
+    });
+    const result = await new LocalUserAuthorizer(deps).authorize(makeDetails());
+    expect(result.decidedBy).toEqual(DECIDED_BY_HUMAN);
+    expect(consume).not.toHaveBeenCalled();
+  });
+});

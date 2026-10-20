@@ -6,6 +6,7 @@ import {
 } from "#src/config/command-effects-config";
 import { attributeCommandOperands } from "./command-effects";
 import type { OperandAttribution } from "./declared-command-effects";
+import { identifierOperandIndices } from "./identifier-operands";
 import { EXECUTION_HOST_TYPES, forEachExecutionIn } from "./nested-execution";
 import {
   ARG_NODE_TYPES,
@@ -150,9 +151,35 @@ export function collectCommandTokens(
   if (config) {
     return collectPatternCommandTokens(node, config, operand, words, declared);
   }
+  const argumentsByIndex: TSNode[] = [];
+  for (let index = 0; index < node.childCount; index++) {
+    const child = node.child(index);
+    if (
+      child?.isNamed &&
+      !COMMAND_PREFIX_TYPES.has(child.type) &&
+      !REDIRECT_NODE_TYPES.has(child.type)
+    ) {
+      argumentsByIndex.push(child);
+    }
+  }
+  const identifierIndices = identifierOperandIndices(
+    extractCommandWord(node, words) ?? "",
+    argumentsByIndex.map((child) =>
+      words.isComputed(child) ? "<computed>" : words.text(child),
+    ),
+  );
+  const identifierStarts = new Set(
+    [...identifierIndices].map((index) => argumentsByIndex[index].startIndex),
+  );
   return [
-    ...collectGenericCommandTokens(node, operand, words, declared),
-    ...collectEmbeddedOptionValues(node, operand, words),
+    ...collectGenericCommandTokens(
+      node,
+      operand,
+      words,
+      declared,
+      identifierStarts,
+    ),
+    ...collectEmbeddedOptionValues(node, operand, words, identifierStarts),
   ];
 }
 
@@ -453,11 +480,13 @@ function collectEmbeddedOptionValues(
   node: TSNode,
   operand: OperandStamp,
   words: WordReader,
+  identifierStarts: ReadonlySet<number>,
 ): PathToken[] {
   const values: PathToken[] = [];
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
     if (!child) continue;
+    if (identifierStarts.has(child.startIndex)) continue;
     if (COMMAND_PREFIX_TYPES.has(child.type)) continue;
     if (!ARG_NODE_TYPES.has(child.type)) continue;
 
@@ -1050,6 +1079,7 @@ function collectGenericCommandTokens(
   operand: OperandStamp,
   words: WordReader,
   declared: DeclaredCommandEffects,
+  identifierStarts: ReadonlySet<number>,
 ): PathToken[] {
   const tokens: PathToken[] = [];
   let seenCommandName = false;
@@ -1081,7 +1111,9 @@ function collectGenericCommandTokens(
 
     // Argument nodes: resolve their text and collect.
     if (ARG_NODE_TYPES.has(child.type)) {
-      tokens.push(wholeArgumentToken(child, words.text(child), operand));
+      if (!identifierStarts.has(child.startIndex)) {
+        tokens.push(wholeArgumentToken(child, words.text(child), operand));
+      }
       continue;
     }
 
