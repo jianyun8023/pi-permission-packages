@@ -180,12 +180,15 @@ describe("BashPathResolver argument spellings", () => {
   });
 });
 
-async function pathTokensOf(command: string): Promise<string[]> {
+async function pathTokensOf(
+  command: string,
+  normalizer = posix,
+): Promise<string[]> {
   const tree = (await getParser()).parse(command);
   if (!tree) throw new Error("parse returned null");
   try {
     const words = new WordReader(ShellVariables.scan([tree.rootNode]));
-    return new BashPathResolver(posix, words)
+    return new BashPathResolver(normalizer, words)
       .resolve(tree.rootNode, [], command)
       .ruleCandidates.map((candidate) => candidate.token);
   } finally {
@@ -195,11 +198,96 @@ async function pathTokensOf(command: string): Promise<string[]> {
 
 describe("typed repository and revision operands", () => {
   it.each([
+    'echo "$(cd nested && tea comments 71 --repo team/repo review)"',
+    "cd missing || tea comments 71 --repo team/repo review",
+    "if true; then cd nested; tea comments 71 --repo=team/repo review; fi",
+    "cd missing; tea comments 71 --repo team/repo review",
+    "cd nested && tea comments 71 --repo missing/repo review",
+  ])(
+    "does not infer repository absence from a projected execution base: %s",
+    async (command) => {
+      const fixture = createTmpFixture();
+      try {
+        const root = fixture.dir();
+        fixture.subdir(root, "team/repo");
+        fixture.subdir(root, "nested/team/repo");
+        const normalizer = new PathNormalizer(
+          pathFlavorForPlatform(process.platform),
+          root,
+        );
+        const tokens = await pathTokensOf(command, normalizer);
+        expect(tokens).toContain(
+          command.includes("missing/repo") ? "missing/repo" : "team/repo",
+        );
+      } finally {
+        fixture.cleanup();
+      }
+    },
+  );
+
+  it("preserves existing local repository slugs, including after cd and through symlinks", async () => {
+    const fixture = createTmpFixture();
+    try {
+      const root = fixture.dir();
+      const outside = fixture.dir();
+      fixture.subdir(root, "nested/team/repo");
+      fixture.symlink(root, "team/repo", outside);
+      const normalizer = new PathNormalizer(
+        pathFlavorForPlatform(process.platform),
+        root,
+      );
+      expect(
+        await pathTokensOf(
+          "tea comments 71 --repo team/repo review",
+          normalizer,
+        ),
+      ).toContain("team/repo");
+      expect(
+        await pathTokensOf(
+          "cd nested && tea comments 71 --repo=team/repo review",
+          normalizer,
+        ),
+      ).toContain("team/repo");
+      expect(
+        await pathTokensOf(
+          "tea comments 71 --repo missing/repo review",
+          normalizer,
+        ),
+      ).toEqual([]);
+      expect(
+        await pathTokensOf(
+          "cd $UNKNOWN && tea comments 71 --repo missing/repo review",
+          normalizer,
+        ),
+      ).toContain("missing/repo");
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  it.each([
+    "docker exec $'--env-file' /tmp/pi-review-host-env fixture cat /etc/container",
+    "docker exec {--env-file,} /tmp/pi-review-host-env fixture cat /etc/container",
+    "docker exec -w {path,--env-file} /tmp/pi-review-host-env fixture cat /etc/container",
+    "docker exec -w$'/app' --env-file /tmp/pi-review-host-env fixture cat /etc/container",
+    "docker exec --env-file /tmp/pi-review-host-env $CONTAINER cat /etc/container",
+  ])(
+    "retains host paths when shell expansion can change Docker option arity: %s",
+    async (command) => {
+      expect(await pathTokensOf(command)).toContain("/tmp/pi-review-host-env");
+    },
+  );
+
+  it.each([
     "git rev-list --count HEAD...origin/fix/workflow-edge-auth-1031",
     "git diff --stat HEAD...origin/fix/workflow-edge-auth-1031",
     "git checkout -b fix/workflow-edge-auth-1031",
     "tea pulls create --repo wanwu-ai/wanwu --head fix/workflow-edge-auth-1031 --base next/20261031",
     "tea pulls edit 71 --repo=wanwu-ai/wanwu --head=fix/workflow-edge-auth-1031",
+    'tea comments 71 --repo wanwu-ai/wanwu-workflow "review body"',
+    'tea comments add 71 --repo=wanwu-ai/wanwu-workflow -d "review body"',
+    "docker exec fixture cat /etc/nginx/conf.d/default.conf",
+    'docker container exec -it -w /app fixture sh -c "cat /etc/nginx/nginx.conf"',
   ])("does not project identifiers as file paths: %s", async (command) => {
     expect(await pathTokensOf(command)).toEqual([]);
   });
@@ -212,7 +300,21 @@ describe("typed repository and revision operands", () => {
       "tea pulls create --repo wanwu-ai/wanwu --description-file /tmp/pr.md",
       ["/tmp/pr.md"],
     ],
-    ['tea pulls create --repo "$(cat /etc/shadow)"', ["/etc/shadow"]],
+    [
+      'tea pulls create --repo "$(cat /etc/shadow)"',
+      ["/etc/shadow", "$(cat /etc/shadow)"],
+    ],
+    ['tea comments 71 --repo /tmp/local/repo "review"', ["/tmp/local/repo"]],
+    ['tea comments 71 --repo ./local/repo "review"', ["./local/repo"]],
+    ["docker exec --env-file /tmp/env fixture cat /etc/config", ["/tmp/env"]],
+    ["docker exec --env-file=/tmp/env fixture cat /etc/config", ["/tmp/env"]],
+    ["docker exec fixture cat /etc/config > /tmp/output", ["/tmp/output"]],
+    ['docker exec fixture cat "$(cat /etc/host-secret)"', ["/etc/host-secret"]],
+    ["docker exec $OPTIONS fixture /etc/config", ["/etc/config"]],
+    [
+      "docker exec --unknown /tmp/host fixture /etc/config",
+      ["/tmp/host", "/etc/config"],
+    ],
     [
       "git fetch --multiple /tmp/one /tmp/two /tmp/three",
       ["/tmp/one", "/tmp/two", "/tmp/three"],

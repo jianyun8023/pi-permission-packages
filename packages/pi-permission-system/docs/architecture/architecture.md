@@ -379,6 +379,10 @@ The authorizer registry has no such fallback, and `PermissionsService` deliberat
 
 On the bash side, which argument tokens count as filesystem operands is settled by [ADR 0009](../decisions/0009-bash-path-projection-completeness-contract.md): candidacy comes from the filesystem (a bare token is a path candidate iff it names an existing entry), the decision comes from explicit rules or the external boundary, and the ADR names both what the projection guarantees and which gaps are accepted residuals rather than bugs.
 A plain `$HOME` / `${HOME}` / `$PWD` / `${PWD}` reference is resolved at token collection, upstream of classification, so an expanded token is gated exactly as its literal spelling; the resolvable set is closed at those two names by the same ADR.
+Known CLI identifiers are classified in `identifier-operands.ts`, before generic path collection.
+Tea's ambiguous `--repo owner/repo` remains a `repository-operand` until the resolver can prove that entry absent for a single simple command without nested execution; existing entries, symlinks, uncertain probes, compound scripts, and unknown working directories retain path checks.
+Docker exec skips container operands only after a literal, recognized option prefix; host `--env-file` operands, redirects, and command substitutions retain path checks, while shell expansions or unknown options fall back to generic collection.
+This classification does not bypass the full command's bash gates.
 
 ## Session approvals: the cache-miss model
 

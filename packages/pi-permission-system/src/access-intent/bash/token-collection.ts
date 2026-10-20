@@ -29,6 +29,8 @@ import { WRAPPER_COMMAND_NAMES } from "./wrapper-analysis";
  * stamped at the same site and never re-derived downstream.
  */
 export type TokenRole =
+  /** A tea repository slug may instead name an existing local checkout. */
+  | "repository-operand"
   /** An operand of unknown path-hood: shape and the existence probe decide. */
   | "operand"
   /** A redirect's own target, which the syntax proves names a file. */
@@ -162,16 +164,24 @@ export function collectCommandTokens(
       argumentsByIndex.push(child);
     }
   }
-  const identifierIndices = identifierOperandIndices(
+  const { identifiers, repositories } = identifierOperandIndices(
     extractCommandWord(node, words) ?? "",
     argumentsByIndex.map((child) =>
       words.isComputed(child) ? "<computed>" : words.text(child),
     ),
   );
   const identifierStarts = new Set(
-    [...identifierIndices].map((index) => argumentsByIndex[index].startIndex),
+    [...identifiers].map((index) => argumentsByIndex[index].startIndex),
   );
   return [
+    ...[...repositories].map(([index, token]): PathToken => {
+      const child = argumentsByIndex[index];
+      const stamp = { ...operand, role: "repository-operand" as const };
+      // An attached --repo=VALUE token is not a whole argument spelling.
+      return words.text(child) === token
+        ? wholeArgumentToken(child, token, stamp)
+        : { token, ...stamp };
+    }),
     ...collectGenericCommandTokens(
       node,
       operand,

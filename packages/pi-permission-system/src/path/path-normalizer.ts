@@ -284,6 +284,11 @@ export class PathNormalizer {
     }
   }
 
+  /** Only confirmed absence can make an overloaded repository operand non-local. */
+  entryIsAbsent(absolutePath: string): boolean {
+    return Boolean(absolutePath) && isAbsentEntry(absolutePath);
+  }
+
   /**
    * True when nothing exists along an accessed path below the filesystem root:
    * the first entry `lstat` finds, walking its canonical form toward the root,

@@ -203,8 +203,15 @@ export class BashPathResolver {
       this.walkForCandidates(salvaged, UNKNOWN_BASE, fragment);
       collected.push(...fragment.map(withoutSpan));
     }
+    // The cd-aware projection is not an execution proof: failed cd branches
+    // and nested control flow can run under another base. Only a single
+    // command with no nested execution can use absence to drop a repository.
+    const repositoryProbeSafe =
+      salvagedRoots.length === 0 && isSingleSimpleCommand(rootNode);
     const candidates = collected.filter(
-      ({ token }) => !this.words.spellsReboundHome(token),
+      (candidate) =>
+        !this.words.spellsReboundHome(candidate.token) &&
+        !(repositoryProbeSafe && this.isAbsentRepository(candidate)),
     );
     const { ruleCandidates, argumentSpellings } =
       this.projectRuleCandidates(candidates);
@@ -248,6 +255,14 @@ export class BashPathResolver {
   }
 
   // ── AST walk — collect PathCandidates ──────────────────────────────────
+
+  private isAbsentRepository({ role, token, base }: PathCandidate): boolean {
+    if (role !== "repository-operand" || base.kind !== "known") return false;
+    const path = this.normalizer.forBashToken(token, {
+      resolveBase: this.normalizer.resolveBase(base.offset),
+    });
+    return this.normalizer.entryIsAbsent(path.value());
+  }
 
   /**
    * Walk the AST once, collecting every path-candidate token tagged with the
@@ -836,6 +851,25 @@ export class BashPathResolver {
   }
 }
 
+function isSingleSimpleCommand(root: TSNode): boolean {
+  if (root.type !== "program" || root.hasError || root.childCount !== 1)
+    return false;
+  const command = root.child(0);
+  if (command?.type !== "command") return false;
+  const pending = [command];
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (!node) continue;
+    for (let index = 0; index < node.childCount; index++) {
+      const child = node.child(index);
+      if (!child) continue;
+      if (child.type === "command") return false;
+      pending.push(child);
+    }
+  }
+  return true;
+}
+
 // ── Pure AST/string helpers ──────────────────────────────────────────────────
 
 /** A character that makes the shell expand a word against the filesystem. */
@@ -978,7 +1012,7 @@ function tagTokens(
  * syntax to name a file, including one the command is about to create.
  */
 function admittedByRole(role: TokenRole): boolean {
-  return role === "redirect-destination";
+  return role === "redirect-destination" || role === "repository-operand";
 }
 
 /**
